@@ -28,3 +28,29 @@ export function toLatin(value: string): string {
 export function parsePercent(text: string): number {
   return Number(toLatin(text).replace(/[^\d.]/g, ''))
 }
+
+/**
+ * Type into a URL-driven filter input and wait for the term to reach the URL.
+ *
+ * `fill()` can land before React has hydrated the controlled input, in which
+ * case the value is set in the DOM but the change handler never runs and the
+ * debounce never fires. Re-typing until the URL picks the term up removes that
+ * race without adding a blanket sleep.
+ */
+export async function filterBy(page: Page, label: string, term: string) {
+  const input = page.getByLabel(label, { exact: true })
+  await expect(input).toBeVisible()
+
+  await expect
+    .poll(
+      async () => {
+        if (!page.url().includes('search=')) {
+          await input.fill('')
+          await input.pressSequentially(term, { delay: 30 })
+        }
+        return page.url()
+      },
+      { timeout: 20_000, intervals: [500, 1000, 1000, 2000] },
+    )
+    .toContain('search=')
+}

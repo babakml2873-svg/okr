@@ -21,7 +21,14 @@ test.describe('دسترسی‌ها بر اساس نقش', () => {
   test('عضو عادی فقط می‌تواند هدف فردی بسازد', async ({ page }) => {
     await signIn(page, 'member')
     await page.goto('/my-okrs')
+
+    // Let the page settle before interacting: the button is re-mounted when
+    // React hydrates, and a click aimed at the pre-hydration node is lost.
+    await expect(page.getByRole('heading', { name: 'OKRهای من' })).toBeVisible()
+    await expect(page.getByText('نتایج کلیدی من', { exact: true })).toBeVisible()
+
     await page.getByRole('button', { name: 'هدف فردی جدید' }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
 
     await page.getByLabel('سطح', { exact: true }).click()
     const options = page.getByRole('option')

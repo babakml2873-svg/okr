@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { parsePercent, signIn } from './helpers'
+import { filterBy, parsePercent, signIn } from './helpers'
 
 test.describe('چرخه کامل OKR', () => {
   test('ساخت هدف، افزودن نتیجه کلیدی و ثبت بازبینی پیشرفت را به‌روز می‌کند', async ({ page }) => {
@@ -79,11 +79,8 @@ test.describe('چرخه کامل OKR', () => {
   test('جست‌وجوی سراسری نتایج مرتبط را برمی‌گرداند', async ({ page }) => {
     await signIn(page, 'admin')
     await page.goto('/search')
-    await page.getByLabel('جست‌وجو', { exact: true }).fill('دامداری')
+    await filterBy(page, 'جست‌وجو', 'دامداری')
 
-    // The filter bar debounces, then pushes the term with router.replace —
-    // a soft navigation that never fires a load event, so poll the URL.
-    await expect.poll(() => page.url(), { timeout: 15000 }).toMatch(/search=/)
     await expect(page.getByText(/نتیجه برای/)).toBeVisible({ timeout: 15000 })
     await expect(page.getByRole('link', { name: /دامداری/ }).first()).toBeVisible()
   })

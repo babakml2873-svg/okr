@@ -13,6 +13,8 @@ export const metadata: Metadata = {
   },
   description:
     'پلتفرم مدیریت اهداف و نتایج کلیدی — تعریف، ردیابی، بازبینی و تحلیل اهداف استراتژیک سازمان',
+  icons: { icon: '/favicon.svg' },
+  robots: { index: false, follow: false },
 }
 
 export const viewport: Viewport = {
