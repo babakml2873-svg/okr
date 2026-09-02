@@ -20,7 +20,7 @@
     "db:reset": "prisma migrate reset --force",
     "format": "prettier --write \"**/*.{ts,tsx,md,json,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,css}\"",
-    "vercel-build": "prisma generate && prisma migrate deploy && next build"
+    "vercel-build": "prisma generate && DATABASE_URL=\"${DIRECT_DATABASE_URL:-$DATABASE_URL}\" prisma migrate deploy && next build"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
