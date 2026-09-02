@@ -188,16 +188,28 @@ e2e/               تست‌های Playwright
 
 ## استقرار
 
-### Vercel
+### Vercel + Neon
 
-پروژه بدون تغییر روی Vercel اجرا می‌شود. یک دیتابیس PostgreSQL مدیریت‌شده (مثل Neon یا Supabase) بسازید و این متغیرها را تنظیم کنید:
+پروژه بدون تغییر روی Vercel اجرا می‌شود. یک دیتابیس PostgreSQL مدیریت‌شده (Neon یا Supabase) بسازید و این متغیرها را تنظیم کنید:
 
-| متغیر          | توضیح                           |
-| -------------- | ------------------------------- |
-| `DATABASE_URL` | رشته اتصال PostgreSQL           |
-| `AUTH_SECRET`  | خروجی `openssl rand -base64 32` |
+| متغیر                 | توضیح                                                        |
+| --------------------- | ------------------------------------------------------------ |
+| `DATABASE_URL`        | رشته اتصال **pooled** — روی Neon endpoint با پسوند `-pooler` |
+| `DIRECT_DATABASE_URL` | رشته اتصال **مستقیم** (بدون `-pooler`) — فقط برای مهاجرت‌ها  |
+| `AUTH_SECRET`         | خروجی `openssl rand -base64 32`                              |
 
-سپس در مرحله build دستور `npm run build` (که خودش `prisma generate` را اجرا می‌کند) و برای اعمال مهاجرت‌ها `npx prisma migrate deploy` را اجرا کنید.
+مهاجرت‌ها لازم نیست دستی اجرا شوند: اسکریپت `vercel-build` هنگام هر استقرار `prisma migrate deploy` را صدا می‌زند.
+
+دو نکته که بدون آن‌ها استقرار روی Vercel کار نمی‌کند و در این پروژه از قبل حل شده‌اند:
+
+- **درایور Neon به‌جای TCP.** فانکشن‌های serverless کوتاه‌عمر و پرتعدادند و یک استخر اتصال TCP به‌ازای هر instance سقف اتصال دیتابیس را پر می‌کند. وقتی `DATABASE_URL` به یک هاست `neon.tech` اشاره کند، `src/server/prisma-client.ts` خودکار از درایور Neon (Postgres روی WebSocket) استفاده می‌کند؛ در غیر این صورت همان کلاینت TCP معمولی.
+- **`ws` نباید باندل شود.** پکیج `ws` وقتی باندل شود پیاده‌سازی جاوااسکریپتی mask کردن فریم را از دست می‌دهد و هر اتصال با خطای `mask is not a function` می‌میرد. به همین دلیل `ws` و پکیج‌های Neon در `serverExternalPackages` قرار گرفته‌اند.
+
+پس از اولین استقرار، برای پر کردن داده‌های نمونه:
+
+```bash
+DATABASE_URL="<pooled-url>" npm run db:seed
+```
 
 ### Self-host
 

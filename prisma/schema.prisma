@@ -10,12 +10,17 @@
 // ---------------------------------------------------------------------------
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Pooled providers (Neon, Supabase) put PgBouncer in front of Postgres, which
+  // cannot run migrations. `directUrl` is used by the CLI only; the app keeps
+  // using the pooled `url`. Falls back to DATABASE_URL when unset.
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 // ------------------------------- enums -------------------------------------

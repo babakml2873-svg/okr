@@ -8,7 +8,7 @@
  * Run with: npm run db:seed
  */
 
-import { PrismaClient, type Prisma } from '@prisma/client'
+import { type Prisma } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 import {
@@ -18,6 +18,7 @@ import {
   weekBoundsFor,
 } from '../src/lib/date'
 import { calculateHealth, calculateKeyResultProgress, rollupObjectiveTree } from '../src/lib/okr'
+import { createPrismaClient } from '../src/server/prisma-client'
 import {
   CHECK_IN_NOTES,
   DEMO_PASSWORD,
@@ -30,7 +31,8 @@ import {
   type SeedKeyResult,
 } from './seed-data'
 
-const prisma = new PrismaClient()
+// Uses the same connection strategy as the app (TCP, or the Neon adapter).
+const prisma = createPrismaClient()
 
 const DAY = 24 * 60 * 60 * 1000
 
