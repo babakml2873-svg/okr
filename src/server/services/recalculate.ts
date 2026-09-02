@@ -84,6 +84,11 @@ export async function recalculateKeyResult(
  * The whole alignment tree for the organization is loaded once — organizations
  * have tens of objectives per quarter, not thousands — and resolved in memory
  * so a deep chain costs one query rather than one per level.
+ *
+ * Objectives in a CLOSED quarter are computed (alignment can cross quarters,
+ * so their values still feed a parent's roll-up) but never written back: a
+ * finished quarter is a historical record, and a check-in today must not
+ * rewrite what last quarter finished at.
  */
 export async function recalculateObjectiveTree(
   tx: Prisma.TransactionClient,
@@ -100,7 +105,7 @@ export async function recalculateObjectiveTree(
       health: true,
       status: true,
       confidence: true,
-      quarter: { select: { startDate: true, endDate: true } },
+      quarter: { select: { startDate: true, endDate: true, status: true } },
       keyResults: {
         where: { status: { not: 'CANCELLED' } },
         select: { progress: true, weight: true },
@@ -137,6 +142,8 @@ export async function recalculateObjectiveTree(
       periodEnd: objective.quarter.endDate,
       now,
     })
+
+    if (objective.quarter.status === 'CLOSED') continue
 
     const shouldComplete = progress >= 100 && objective.status === 'ACTIVE'
     const shouldReopen = progress < 100 && objective.status === 'COMPLETED'

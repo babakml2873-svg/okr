@@ -17,7 +17,12 @@ import {
   quarterStatusFor,
   weekBoundsFor,
 } from '../src/lib/date'
-import { calculateHealth, calculateKeyResultProgress, rollupObjectiveTree } from '../src/lib/okr'
+import {
+  calculateHealth,
+  calculateKeyResultProgress,
+  rollupObjectiveTree,
+  weightedAverage,
+} from '../src/lib/okr'
 import { createPrismaClient } from '../src/server/prisma-client'
 import {
   CHECK_IN_NOTES,
@@ -449,19 +454,23 @@ async function main() {
   // ------------------------------------------ closed quarters for trends
   //
   // A few finished objectives in past periods so the quarter-performance chart
-  // has something to compare against.
+  // has something to compare against. These get *real* key results rather than
+  // a hard-coded progress value: the roll-up recomputes every objective from
+  // its key results, so an objective with none would legitimately resolve to
+  // 0% and silently erase the history the chart is built on.
   for (const [index, quarter] of closedQuarters.entries()) {
     for (const seedObjective of OBJECTIVES.slice(0, 4)) {
-      const progress = 62 + index * 9 + Math.round(random() * 12)
-      await prisma.objective.create({
+      // Each past quarter lands a little higher than the one before it.
+      const targetProgress = Math.min(96, 62 + index * 9 + Math.round(random() * 10))
+
+      const objective = await prisma.objective.create({
         data: {
           organizationId: organization.id,
           title: `${seedObjective.title} (${quarter.label})`,
           description: seedObjective.description,
           level: seedObjective.level,
-          status: progress >= 100 ? 'COMPLETED' : 'COMPLETED',
+          status: 'COMPLETED',
           health: 'ON_TRACK',
-          progress: Math.min(100, progress),
           confidence: 8,
           ownerId: userId(seedObjective.owner),
           createdById: userId('ceo'),
@@ -472,6 +481,59 @@ async function main() {
           completedAt: quarter.endDate,
           createdAt: quarter.startDate,
         },
+      })
+
+      // Reuse the objective's real key-result shapes, with each one landing
+      // near the intended progress so the weighted roll-up reproduces it.
+      const historicKeyResults = seedObjective.keyResults.slice(0, 3)
+      const rolledUp: { progress: number; weight: number }[] = []
+
+      for (const [keyResultIndex, seedKeyResult] of historicKeyResults.entries()) {
+        const ratio = Math.min(1, Math.max(0, targetProgress / 100 + (random() - 0.5) * 0.12))
+        const currentValue =
+          seedKeyResult.metricType === 'BINARY'
+            ? ratio >= 0.6
+              ? seedKeyResult.targetValue
+              : seedKeyResult.startValue
+            : Math.round(
+                (seedKeyResult.startValue +
+                  (seedKeyResult.targetValue - seedKeyResult.startValue) * ratio) *
+                  100,
+              ) / 100
+
+        const progress = calculateKeyResultProgress({ ...seedKeyResult, currentValue })
+
+        await prisma.keyResult.create({
+          data: {
+            organizationId: organization.id,
+            objectiveId: objective.id,
+            title: seedKeyResult.title,
+            metricType: seedKeyResult.metricType,
+            startValue: seedKeyResult.startValue,
+            currentValue,
+            targetValue: seedKeyResult.targetValue,
+            unit: seedKeyResult.unit ?? null,
+            weight: seedKeyResult.weight ?? 1,
+            confidence: seedKeyResult.confidence,
+            progress,
+            health: 'ON_TRACK',
+            status: progress >= 100 ? 'COMPLETED' : 'ACTIVE',
+            ownerId: userId(seedKeyResult.owner),
+            dueDate: quarter.endDate,
+            sortOrder: keyResultIndex,
+            lastCheckInAt: quarter.endDate,
+            createdAt: quarter.startDate,
+          },
+        })
+
+        rolledUp.push({ progress, weight: seedKeyResult.weight ?? 1 })
+      }
+
+      // Store the value the roll-up engine itself produces, so recomputing the
+      // organization later is a no-op rather than a change.
+      await prisma.objective.update({
+        where: { id: objective.id },
+        data: { progress: weightedAverage(rolledUp) },
       })
     }
   }
