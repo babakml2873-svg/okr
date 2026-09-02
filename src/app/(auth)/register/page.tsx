@@ -14,9 +14,7 @@ export default async function RegisterPage({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">
-        {invitation ? 'پذیرش دعوت‌نامه' : 'ساخت سازمان جدید'}
-      </h1>
+      <h1 className="text-2xl font-bold">{invitation ? 'پذیرش دعوت‌نامه' : 'ساخت سازمان جدید'}</h1>
       <p className="text-muted-foreground mt-2 text-sm">
         {invitation
           ? 'برای پیوستن به سازمان، حساب کاربری خود را بسازید.'

@@ -17,11 +17,14 @@ import { parsePersianNumber } from '@/lib/format/numbers'
 export const idSchema = z.string().min(1, 'شناسه نامعتبر است')
 
 /** Accepts Persian digits and Persian separators from the UI. */
-export const numericSchema = z.preprocess((value) => {
-  if (typeof value === 'number') return value
-  if (typeof value === 'string') return parsePersianNumber(value)
-  return value
-}, z.number({ error: 'یک عدد معتبر وارد کنید' }).finite('عدد وارد‌شده معتبر نیست'))
+export const numericSchema = z.preprocess(
+  (value) => {
+    if (typeof value === 'number') return value
+    if (typeof value === 'string') return parsePersianNumber(value)
+    return value
+  },
+  z.number({ error: 'یک عدد معتبر وارد کنید' }).finite('عدد وارد‌شده معتبر نیست'),
+)
 
 /** An id that may be absent, empty or explicitly null — all normalise to null. */
 export const optionalIdSchema = z
@@ -29,11 +32,14 @@ export const optionalIdSchema = z
   .optional()
   .transform((value) => (value === '' || value === undefined ? null : value))
 
-export const dateSchema = z.preprocess((value) => {
-  if (value instanceof Date) return value
-  if (typeof value === 'string' && value.trim() !== '') return new Date(value)
-  return value
-}, z.date({ error: 'تاریخ معتبر وارد کنید' }))
+export const dateSchema = z.preprocess(
+  (value) => {
+    if (value instanceof Date) return value
+    if (typeof value === 'string' && value.trim() !== '') return new Date(value)
+    return value
+  },
+  z.date({ error: 'تاریخ معتبر وارد کنید' }),
+)
 
 export const optionalDateSchema = z.preprocess((value) => {
   if (value === '' || value === null || value === undefined) return null
@@ -211,18 +217,18 @@ export const keyResultSchema = z
     dueDate: optionalDateSchema,
     autoUpdateFromInitiatives: z.boolean().default(false),
   })
-  .refine(
-    (data) => data.metricType !== 'INCREASE' || data.targetValue >= data.startValue,
-    { message: 'برای متریک افزایشی، مقدار هدف باید بزرگ‌تر از مقدار شروع باشد', path: ['targetValue'] },
-  )
-  .refine(
-    (data) => data.metricType !== 'DECREASE' || data.targetValue <= data.startValue,
-    { message: 'برای متریک کاهشی، مقدار هدف باید کوچک‌تر از مقدار شروع باشد', path: ['targetValue'] },
-  )
-  .refine(
-    (data) => data.metricType !== 'MILESTONE' || data.targetValue > 0,
-    { message: 'تعداد مراحل باید بزرگ‌تر از صفر باشد', path: ['targetValue'] },
-  )
+  .refine((data) => data.metricType !== 'INCREASE' || data.targetValue >= data.startValue, {
+    message: 'برای متریک افزایشی، مقدار هدف باید بزرگ‌تر از مقدار شروع باشد',
+    path: ['targetValue'],
+  })
+  .refine((data) => data.metricType !== 'DECREASE' || data.targetValue <= data.startValue, {
+    message: 'برای متریک کاهشی، مقدار هدف باید کوچک‌تر از مقدار شروع باشد',
+    path: ['targetValue'],
+  })
+  .refine((data) => data.metricType !== 'MILESTONE' || data.targetValue > 0, {
+    message: 'تعداد مراحل باید بزرگ‌تر از صفر باشد',
+    path: ['targetValue'],
+  })
 
 export const updateKeyResultSchema = z.object({
   id: idSchema,
@@ -282,11 +288,17 @@ export const commentSchema = z
 // filtering & search
 // --------------------------------------------------------------------------
 
+/** Filter ids drop out entirely when unset, so a `where` clause stays sparse. */
+const filterIdSchema = z
+  .union([idSchema, z.literal(''), z.literal('all'), z.null()])
+  .optional()
+  .transform((value) => (value && value !== 'all' ? value : undefined))
+
 export const okrFilterSchema = z.object({
-  quarterId: optionalIdSchema,
-  departmentId: optionalIdSchema,
-  teamId: optionalIdSchema,
-  ownerId: optionalIdSchema,
+  quarterId: filterIdSchema,
+  departmentId: filterIdSchema,
+  teamId: filterIdSchema,
+  ownerId: filterIdSchema,
   level: objectiveLevelSchema.optional(),
   status: objectiveStatusSchema.optional(),
   health: healthSchema.optional(),
@@ -310,7 +322,8 @@ export type UpdateKeyResultInput = z.infer<typeof updateKeyResultSchema>
 export type InitiativeInput = z.infer<typeof initiativeSchema>
 export type CheckInInput = z.infer<typeof checkInSchema>
 export type CommentInput = z.infer<typeof commentSchema>
-export type OkrFilterInput = z.infer<typeof okrFilterSchema>
+/** Filters are always partial at the call site — every field is optional. */
+export type OkrFilterInput = Partial<z.infer<typeof okrFilterSchema>>
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>
 export type DepartmentInput = z.infer<typeof departmentSchema>
 export type TeamInput = z.infer<typeof teamSchema>

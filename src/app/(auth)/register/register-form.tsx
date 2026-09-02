@@ -54,7 +54,13 @@ export function RegisterForm({ invitationToken }: { invitationToken?: string }) 
         </div>
       )}
 
-      <Field id="name" label="نام و نام خانوادگی" placeholder="بابک محمدی" required errors={state.fieldErrors?.name} />
+      <Field
+        id="name"
+        label="نام و نام خانوادگی"
+        placeholder="بابک محمدی"
+        required
+        errors={state.fieldErrors?.name}
+      />
 
       {!invitationToken && (
         <Field

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { calculateHealth, confidenceBand, elapsedRatio, expectedProgress, progressBand } from './health'
+import {
+  calculateHealth,
+  confidenceBand,
+  elapsedRatio,
+  expectedProgress,
+  progressBand,
+} from './health'
 
 const START = new Date('2025-03-21T00:00:00Z')
 const END = new Date('2025-06-21T00:00:00Z')
@@ -76,13 +82,25 @@ describe('calculateHealth', () => {
 
   it('is forgiving at the very start of a period', () => {
     expect(
-      calculateHealth({ progress: 0, confidence: 8, periodStart: START, periodEnd: END, now: START }),
+      calculateHealth({
+        progress: 0,
+        confidence: 8,
+        periodStart: START,
+        periodEnd: END,
+        now: START,
+      }),
     ).toBe('ON_TRACK')
   })
 
   it('is unforgiving at the very end of a period', () => {
     expect(
-      calculateHealth({ progress: 40, confidence: 8, periodStart: START, periodEnd: END, now: END }),
+      calculateHealth({
+        progress: 40,
+        confidence: 8,
+        periodStart: START,
+        periodEnd: END,
+        now: END,
+      }),
     ).toBe('OFF_TRACK')
   })
 })

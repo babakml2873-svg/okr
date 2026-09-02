@@ -72,7 +72,10 @@ export function calculateKeyResultProgress(input: MetricInput): number {
  * The value a key result must reach for a given progress percentage.
  * Used by the check-in dialog to preview "what would 100% look like".
  */
-export function valueForProgress(input: Omit<MetricInput, 'currentValue'>, progress: number): number {
+export function valueForProgress(
+  input: Omit<MetricInput, 'currentValue'>,
+  progress: number,
+): number {
   const ratio = clampProgress(progress) / 100
   if (input.metricType === 'BINARY') return ratio >= 1 ? input.targetValue : input.startValue
   return input.startValue + (input.targetValue - input.startValue) * ratio

@@ -112,9 +112,9 @@ describe('checkInSchema', () => {
   })
 
   it('rejects a confidence score outside 1–10', () => {
-    expect(checkInSchema.safeParse({ keyResultId: 'kr-1', newValue: 5, confidence: 12 }).success).toBe(
-      false,
-    )
+    expect(
+      checkInSchema.safeParse({ keyResultId: 'kr-1', newValue: 5, confidence: 12 }).success,
+    ).toBe(false)
   })
 })
 

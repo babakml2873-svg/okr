@@ -25,7 +25,8 @@ export function weightedAverage(items: WeightedItem[]): number {
   let totalWeight = 0
 
   for (const item of usable) {
-    const weight = Number.isFinite(item.weight) && (item.weight ?? 0) > 0 ? (item.weight as number) : 1
+    const weight =
+      Number.isFinite(item.weight) && (item.weight ?? 0) > 0 ? (item.weight as number) : 1
     weightedSum += clampProgress(item.progress) * weight
     totalWeight += weight
   }

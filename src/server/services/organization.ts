@@ -8,12 +8,55 @@ import { prisma } from '@/server/db'
  * `nywmaw` rather than a meaningless counter.
  */
 const TRANSLITERATION: Record<string, string> = {
-  ا: 'a', آ: 'a', أ: 'a', إ: 'e', ب: 'b', پ: 'p', ت: 't', ث: 's', ج: 'j', چ: 'ch',
-  ح: 'h', خ: 'kh', د: 'd', ذ: 'z', ر: 'r', ز: 'z', ژ: 'zh', س: 's', ش: 'sh', ص: 's',
-  ض: 'z', ط: 't', ظ: 'z', ع: 'a', غ: 'gh', ف: 'f', ق: 'gh', ک: 'k', ك: 'k', گ: 'g',
-  ل: 'l', م: 'm', ن: 'n', و: 'w', ه: 'h', ی: 'y', ي: 'y', ة: 'h', ء: '',
-  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
-  '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+  ا: 'a',
+  آ: 'a',
+  أ: 'a',
+  إ: 'e',
+  ب: 'b',
+  پ: 'p',
+  ت: 't',
+  ث: 's',
+  ج: 'j',
+  چ: 'ch',
+  ح: 'h',
+  خ: 'kh',
+  د: 'd',
+  ذ: 'z',
+  ر: 'r',
+  ز: 'z',
+  ژ: 'zh',
+  س: 's',
+  ش: 'sh',
+  ص: 's',
+  ض: 'z',
+  ط: 't',
+  ظ: 'z',
+  ع: 'a',
+  غ: 'gh',
+  ف: 'f',
+  ق: 'gh',
+  ک: 'k',
+  ك: 'k',
+  گ: 'g',
+  ل: 'l',
+  م: 'm',
+  ن: 'n',
+  و: 'w',
+  ه: 'h',
+  ی: 'y',
+  ي: 'y',
+  ة: 'h',
+  ء: '',
+  '۰': '0',
+  '۱': '1',
+  '۲': '2',
+  '۳': '3',
+  '۴': '4',
+  '۵': '5',
+  '۶': '6',
+  '۷': '7',
+  '۸': '8',
+  '۹': '9',
 }
 
 /** URL-safe slug derived from a (possibly Persian) organization name. */
@@ -36,7 +79,9 @@ export async function uniqueSlug(name: string, client: Prisma.TransactionClient 
   const base = slugify(name)
   let candidate = base
   let counter = 1
-  while (await client.organization.findUnique({ where: { slug: candidate }, select: { id: true } })) {
+  while (
+    await client.organization.findUnique({ where: { slug: candidate }, select: { id: true } })
+  ) {
     counter += 1
     candidate = `${base}-${counter}`
   }
@@ -53,8 +98,7 @@ export async function createDefaultQuarters(
   calendarType: CalendarType,
   now = new Date(),
 ) {
-  const baseYear =
-    calendarType === 'JALALI' ? currentJalaliYear(now) : now.getUTCFullYear()
+  const baseYear = calendarType === 'JALALI' ? currentJalaliYear(now) : now.getUTCFullYear()
 
   const definitions = [
     ...buildYearQuarters(baseYear, calendarType),

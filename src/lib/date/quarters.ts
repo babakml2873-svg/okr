@@ -121,7 +121,7 @@ export function shiftQuarter(
   quarterNumber: number,
   offset: number,
 ): { year: number; quarterNumber: number } {
-  const zeroBased = (year * 4 + (quarterNumber - 1)) + offset
+  const zeroBased = year * 4 + (quarterNumber - 1) + offset
   return { year: Math.floor(zeroBased / 4), quarterNumber: (zeroBased % 4) + 1 }
 }
 

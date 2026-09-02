@@ -23,7 +23,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
       </div>
 
       <div className="bg-primary relative hidden overflow-hidden lg:block">
-        <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:28px_28px]" />
+        <div className="absolute inset-0 [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:28px_28px] opacity-20" />
         <div className="text-primary-foreground relative flex h-full flex-col justify-center px-14">
           <h2 className="text-3xl leading-relaxed font-bold">
             اهداف سازمان را از استراتژی تا اجرا هم‌راستا کنید

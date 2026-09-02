@@ -51,7 +51,10 @@ export interface FormatNumberOptions {
 }
 
 /** Group-separated number in Persian digits, e.g. 1234567 → «۱٬۲۳۴٬۵۶۷». */
-export function formatNumber(value: number | null | undefined, options: FormatNumberOptions = {}): string {
+export function formatNumber(
+  value: number | null | undefined,
+  options: FormatNumberOptions = {},
+): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   const { maximumFractionDigits = 2, minimumFractionDigits = 0, persianDigits = true } = options
 
@@ -73,8 +76,10 @@ export function formatPercent(value: number | null | undefined, fractionDigits =
 export function formatCompactNumber(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   const abs = Math.abs(value)
-  if (abs >= 1_000_000_000) return `${formatNumber(value / 1_000_000_000, { maximumFractionDigits: 1 })} میلیارد`
-  if (abs >= 1_000_000) return `${formatNumber(value / 1_000_000, { maximumFractionDigits: 1 })} میلیون`
+  if (abs >= 1_000_000_000)
+    return `${formatNumber(value / 1_000_000_000, { maximumFractionDigits: 1 })} میلیارد`
+  if (abs >= 1_000_000)
+    return `${formatNumber(value / 1_000_000, { maximumFractionDigits: 1 })} میلیون`
   if (abs >= 1_000) return `${formatNumber(value / 1_000, { maximumFractionDigits: 1 })} هزار`
   return formatNumber(value)
 }

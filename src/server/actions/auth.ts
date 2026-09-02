@@ -46,10 +46,7 @@ export async function loginAction(_prev: ActionState, formData: FormData): Promi
  * organization; otherwise a brand-new organization is created with the user as
  * its administrator.
  */
-export async function registerAction(
-  _prev: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
+export async function registerAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const invitationToken = (formData.get('invitationToken') as string | null) ?? undefined
 
   const parsed = registerSchema.safeParse({
@@ -73,7 +70,10 @@ export async function registerAction(
 
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } })
   if (existing) {
-    return { error: 'کاربری با این ایمیل از قبل ثبت شده است.', fieldErrors: { email: ['این ایمیل تکراری است'] } }
+    return {
+      error: 'کاربری با این ایمیل از قبل ثبت شده است.',
+      fieldErrors: { email: ['این ایمیل تکراری است'] },
+    }
   }
 
   try {
@@ -106,10 +106,7 @@ export async function registerAction(
           data: { acceptedAt: new Date() },
         })
       } else {
-        await createOrganization(
-          { name: parsed.data.organizationName, ownerUserId: user.id },
-          tx,
-        )
+        await createOrganization({ name: parsed.data.organizationName, ownerUserId: user.id }, tx)
       }
     })
   } catch (error) {

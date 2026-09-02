@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { can, creatableLevels, isAtLeast, PermissionError, requirePermission, type Actor } from './permissions'
+import {
+  can,
+  creatableLevels,
+  isAtLeast,
+  PermissionError,
+  requirePermission,
+  type Actor,
+} from './permissions'
 
 const ORG = 'org-1'
 const OTHER_ORG = 'org-2'
@@ -80,7 +87,9 @@ describe('EXECUTIVE', () => {
 describe('MANAGER', () => {
   it('may not create company-level objectives', () => {
     expect(can(manager, 'objective:create', { organizationId: ORG, level: 'COMPANY' })).toBe(false)
-    expect(can(manager, 'objective:create', { organizationId: ORG, level: 'DEPARTMENT' })).toBe(true)
+    expect(can(manager, 'objective:create', { organizationId: ORG, level: 'DEPARTMENT' })).toBe(
+      true,
+    )
   })
 
   it('may manage OKRs inside its own department', () => {
@@ -99,7 +108,9 @@ describe('MANAGER', () => {
   })
 
   it('may manage OKRs it owns outside its department', () => {
-    expect(can(manager, 'objective:update', { ...engineeringObjective, ownerId: 'u-manager' })).toBe(true)
+    expect(
+      can(manager, 'objective:update', { ...engineeringObjective, ownerId: 'u-manager' }),
+    ).toBe(true)
   })
 
   it('may not manage members', () => {
@@ -135,8 +146,20 @@ describe('MEMBER', () => {
   })
 
   it('may only create individual objectives for itself', () => {
-    expect(can(member, 'objective:create', { organizationId: ORG, level: 'INDIVIDUAL', ownerId: 'u-member' })).toBe(true)
-    expect(can(member, 'objective:create', { organizationId: ORG, level: 'INDIVIDUAL', ownerId: 'other' })).toBe(false)
+    expect(
+      can(member, 'objective:create', {
+        organizationId: ORG,
+        level: 'INDIVIDUAL',
+        ownerId: 'u-member',
+      }),
+    ).toBe(true)
+    expect(
+      can(member, 'objective:create', {
+        organizationId: ORG,
+        level: 'INDIVIDUAL',
+        ownerId: 'other',
+      }),
+    ).toBe(false)
     expect(can(member, 'objective:create', { organizationId: ORG, level: 'TEAM' })).toBe(false)
   })
 
