@@ -1,0 +1,3 @@
+# The OKR workspace is private; nothing here should be indexed.
+User-agent: *
+Disallow: /

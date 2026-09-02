@@ -1,0 +1,553 @@
+// ---------------------------------------------------------------------------
+// OKR Management Platform — data model
+//
+// Conventions:
+//   * Every tenant-owned row carries `organizationId`; services always scope
+//     queries by it, so a query can never leak across organizations.
+//   * All timestamps are stored in UTC. Jalali is a presentation concern only.
+//   * `progress` on objectives/key results is a *cache* of the domain engine in
+//     src/lib/okr — it is recomputed transactionally on every write.
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Pooled providers (Neon, Supabase) put PgBouncer in front of Postgres, which
+// cannot run migrations. Rather than a `directUrl` here — which Prisma would
+// then require in *every* environment, including plain-Postgres CI and Docker —
+// the `vercel-build` script points DATABASE_URL at DIRECT_DATABASE_URL for the
+// migration step only, falling back to DATABASE_URL when it is not set.
+
+// ------------------------------- enums -------------------------------------
+
+enum Role {
+  ADMIN
+  EXECUTIVE
+  MANAGER
+  MEMBER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  DISABLED
+}
+
+enum CalendarType {
+  JALALI
+  GREGORIAN
+}
+
+enum QuarterStatus {
+  UPCOMING
+  ACTIVE
+  CLOSED
+}
+
+enum ObjectiveLevel {
+  COMPANY
+  DEPARTMENT
+  TEAM
+  INDIVIDUAL
+}
+
+enum ObjectiveStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+/// Derived risk signal. Computed from progress vs. elapsed time and confidence.
+enum Health {
+  ON_TRACK
+  AT_RISK
+  OFF_TRACK
+}
+
+enum RollupMode {
+  KEY_RESULTS_ONLY
+  KEY_RESULTS_AND_CHILDREN
+}
+
+enum MetricType {
+  INCREASE
+  DECREASE
+  BINARY
+  MILESTONE
+}
+
+enum KeyResultStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum InitiativeStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  DONE
+  BLOCKED
+  CANCELLED
+}
+
+enum CheckInCadence {
+  WEEKLY
+  MONTHLY
+  ADHOC
+}
+
+enum NotificationType {
+  CHECK_IN_DUE
+  KEY_RESULT_ASSIGNED
+  OBJECTIVE_ASSIGNED
+  COMMENT_ADDED
+  MENTIONED
+  AT_RISK
+  INVITATION
+  OBJECTIVE_COMPLETED
+}
+
+enum ActivityAction {
+  CREATED
+  UPDATED
+  DELETED
+  CHECKED_IN
+  COMMENTED
+  STATUS_CHANGED
+}
+
+enum EntityType {
+  OBJECTIVE
+  KEY_RESULT
+  INITIATIVE
+  CHECK_IN
+  COMMENT
+  MEMBER
+  DEPARTMENT
+  TEAM
+  QUARTER
+}
+
+enum SnapshotSubject {
+  OBJECTIVE
+  KEY_RESULT
+}
+
+// ------------------------------ tenancy ------------------------------------
+
+model Organization {
+  id           String       @id @default(cuid())
+  name         String
+  slug         String       @unique
+  logoUrl      String?
+  calendarType CalendarType @default(JALALI)
+  /// 0 = Saturday (the Iranian work week starts on Saturday).
+  weekStartsOn Int          @default(0)
+  settings     Json         @default("{}")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  memberships       Membership[]
+  invitations       Invitation[]
+  departments       Department[]
+  teams             Team[]
+  quarters          Quarter[]
+  objectives        Objective[]
+  keyResults        KeyResult[]
+  initiatives       Initiative[]
+  checkIns          CheckIn[]
+  comments          Comment[]
+  notifications     Notification[]
+  progressSnapshots ProgressSnapshot[]
+  activityLogs      ActivityLog[]
+
+  @@map("organizations")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  jobTitle     String?
+  avatarUrl    String?
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  memberships       Membership[]
+  ownedObjectives   Objective[]    @relation("ObjectiveOwner")
+  createdObjectives Objective[]    @relation("ObjectiveCreator")
+  ownedKeyResults   KeyResult[]    @relation("KeyResultOwner")
+  ownedInitiatives  Initiative[]   @relation("InitiativeOwner")
+  checkIns          CheckIn[]
+  comments          Comment[]
+  notifications     Notification[]
+  activityLogs      ActivityLog[]
+  sentInvitations   Invitation[]   @relation("InvitationSender")
+  headedDepartments Department[]   @relation("DepartmentHead")
+  ledTeams          Team[]         @relation("TeamLead")
+
+  @@map("users")
+}
+
+/// Join table between users and organizations. Roles and org-scoped placement
+/// (department/team) live here, not on the user, so one account can belong to
+/// several organizations with different permissions.
+model Membership {
+  id             String           @id @default(cuid())
+  userId         String
+  organizationId String
+  role           Role             @default(MEMBER)
+  status         MembershipStatus @default(ACTIVE)
+  departmentId   String?
+  teamId         String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  team         Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId, role])
+  @@index([organizationId, departmentId])
+  @@index([organizationId, teamId])
+  @@map("memberships")
+}
+
+model Invitation {
+  id             String    @id @default(cuid())
+  organizationId String
+  email          String
+  role           Role      @default(MEMBER)
+  token          String    @unique
+  departmentId   String?
+  teamId         String?
+  invitedById    String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@map("invitations")
+}
+
+// ---------------------------- org structure --------------------------------
+
+model Department {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  color          String   @default("#4f46e5")
+  headId         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  head         User?        @relation("DepartmentHead", fields: [headId], references: [id], onDelete: SetNull)
+  teams        Team[]
+  memberships  Membership[]
+  objectives   Objective[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("departments")
+}
+
+model Team {
+  id             String   @id @default(cuid())
+  organizationId String
+  departmentId   String
+  name           String
+  description    String?
+  leadId         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department   Department   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  lead         User?        @relation("TeamLead", fields: [leadId], references: [id], onDelete: SetNull)
+  memberships  Membership[]
+  objectives   Objective[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, departmentId])
+  @@map("teams")
+}
+
+/// A planning period. For JALALI organizations `year` is the Jalali year and
+/// quarter 1 is Spring (Farvardin–Khordad); `startDate`/`endDate` are the
+/// corresponding Gregorian instants so all date math stays in UTC.
+model Quarter {
+  id             String        @id @default(cuid())
+  organizationId String
+  year           Int
+  quarterNumber  Int
+  label          String
+  startDate      DateTime
+  endDate        DateTime
+  status         QuarterStatus @default(UPCOMING)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  objectives   Objective[]
+
+  @@unique([organizationId, year, quarterNumber])
+  @@index([organizationId, status])
+  @@map("quarters")
+}
+
+// -------------------------------- OKRs -------------------------------------
+
+model Objective {
+  id             String          @id @default(cuid())
+  organizationId String
+  title          String
+  description    String?
+  level          ObjectiveLevel  @default(COMPANY)
+  status         ObjectiveStatus @default(ACTIVE)
+  health         Health          @default(ON_TRACK)
+  rollupMode     RollupMode      @default(KEY_RESULTS_ONLY)
+  /// Cached weighted roll-up of the key results (and children), 0–100.
+  progress       Float           @default(0)
+  /// Owner-declared confidence, 1–10.
+  confidence     Int             @default(7)
+  ownerId        String
+  createdById    String
+  departmentId   String?
+  teamId         String?
+  quarterId      String
+  parentId       String?
+  sortOrder      Int             @default(0)
+  archivedAt     DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        User         @relation("ObjectiveOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  createdBy    User         @relation("ObjectiveCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  team         Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  quarter      Quarter      @relation(fields: [quarterId], references: [id], onDelete: Restrict)
+  parent       Objective?   @relation("ObjectiveAlignment", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Objective[]  @relation("ObjectiveAlignment")
+
+  keyResults KeyResult[]
+  checkIns   CheckIn[]
+  comments   Comment[]
+
+  @@index([organizationId, quarterId])
+  @@index([organizationId, ownerId])
+  @@index([organizationId, departmentId])
+  @@index([organizationId, status])
+  @@index([parentId])
+  @@map("objectives")
+}
+
+model KeyResult {
+  id                        String          @id @default(cuid())
+  organizationId            String
+  objectiveId               String
+  title                     String
+  description               String?
+  metricType                MetricType      @default(INCREASE)
+  startValue                Float           @default(0)
+  currentValue              Float           @default(0)
+  targetValue               Float           @default(100)
+  unit                      String?
+  /// Relative weight inside the parent objective's roll-up.
+  weight                    Float           @default(1)
+  progress                  Float           @default(0)
+  confidence                Int             @default(7)
+  status                    KeyResultStatus @default(ACTIVE)
+  health                    Health          @default(ON_TRACK)
+  dueDate                   DateTime?
+  ownerId                   String
+  sortOrder                 Int             @default(0)
+  /// MILESTONE only: derive `currentValue` from the count of DONE initiatives.
+  autoUpdateFromInitiatives Boolean         @default(false)
+  lastCheckInAt             DateTime?
+  completedAt               DateTime?
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  objective    Objective    @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  owner        User         @relation("KeyResultOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  initiatives Initiative[]
+  checkIns    CheckIn[]
+  comments    Comment[]
+
+  @@index([organizationId, objectiveId])
+  @@index([organizationId, ownerId])
+  @@index([organizationId, status])
+  @@map("key_results")
+}
+
+model Initiative {
+  id             String           @id @default(cuid())
+  organizationId String
+  keyResultId    String
+  title          String
+  description    String?
+  status         InitiativeStatus @default(NOT_STARTED)
+  ownerId        String
+  dueDate        DateTime?
+  completedAt    DateTime?
+  sortOrder      Int              @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  keyResult    KeyResult    @relation(fields: [keyResultId], references: [id], onDelete: Cascade)
+  owner        User         @relation("InitiativeOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  comments     Comment[]
+
+  @@index([organizationId, keyResultId])
+  @@index([organizationId, ownerId])
+  @@map("initiatives")
+}
+
+/// A periodic progress review. Exactly one of `keyResultId` / `objectiveId`
+/// is set; the service layer enforces that invariant.
+model CheckIn {
+  id               String         @id @default(cuid())
+  organizationId   String
+  keyResultId      String?
+  objectiveId      String?
+  authorId         String
+  cadence          CheckInCadence @default(WEEKLY)
+  previousValue    Float?
+  newValue         Float?
+  previousProgress Float
+  newProgress      Float
+  confidence       Int
+  health           Health
+  note             String?
+  blockers         String?
+  nextActions      String?
+  periodStart      DateTime
+  periodEnd        DateTime
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  keyResult    KeyResult?   @relation(fields: [keyResultId], references: [id], onDelete: Cascade)
+  objective    Objective?   @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  author       User         @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  comments     Comment[]
+
+  @@index([organizationId, createdAt])
+  @@index([keyResultId, createdAt])
+  @@index([objectiveId, createdAt])
+  @@map("check_ins")
+}
+
+/// Threaded discussion. Explicit nullable foreign keys (rather than a
+/// polymorphic type+id pair) keep referential integrity in the database.
+model Comment {
+  id             String    @id @default(cuid())
+  organizationId String
+  authorId       String
+  body           String
+  objectiveId    String?
+  keyResultId    String?
+  initiativeId   String?
+  checkInId      String?
+  parentId       String?
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  author       User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  objective    Objective?   @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  keyResult    KeyResult?   @relation(fields: [keyResultId], references: [id], onDelete: Cascade)
+  initiative   Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  checkIn      CheckIn?     @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+  parent       Comment?     @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies      Comment[]    @relation("CommentThread")
+
+  @@index([organizationId, createdAt])
+  @@index([objectiveId])
+  @@index([keyResultId])
+  @@index([initiativeId])
+  @@map("comments")
+}
+
+model Notification {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String
+  type           NotificationType
+  title          String
+  body           String?
+  link           String?
+  entityType     EntityType?
+  entityId       String?
+  readAt         DateTime?
+  createdAt      DateTime         @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([organizationId, createdAt])
+  @@map("notifications")
+}
+
+/// Daily progress samples that power trend charts and quarter performance.
+model ProgressSnapshot {
+  id             String          @id @default(cuid())
+  organizationId String
+  subjectType    SnapshotSubject
+  subjectId      String
+  progress       Float
+  confidence     Int?
+  health         Health
+  capturedOn     DateTime        @db.Date
+  createdAt      DateTime        @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectType, subjectId, capturedOn])
+  @@index([organizationId, capturedOn])
+  @@map("progress_snapshots")
+}
+
+model ActivityLog {
+  id             String         @id @default(cuid())
+  organizationId String
+  actorId        String
+  action         ActivityAction
+  entityType     EntityType
+  entityId       String
+  summary        String
+  metadata       Json           @default("{}")
+  createdAt      DateTime       @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User         @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("activity_logs")
+}
